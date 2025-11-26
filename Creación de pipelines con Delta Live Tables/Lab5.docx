@@ -1,0 +1,356 @@
+Creación de pipelines de datos con Delta Live Tables
+
+Lakeflow Declarative Pipelines es un marco dentro de la Plataforma
+Lakehouse de Databricks para construir y ejecutar pipelines de datos de
+**manera declarativa**. Esto significa que especificas qué
+transformaciones de datos quieres lograr y el sistema automáticamente
+determina cómo ejecutarlas de forma eficiente, gestionando muchas de las
+complejidades de la ingeniería de datos tradicional.
+
+Lakeflow Declarative Pipelines simplifica el desarrollo de oleoductos
+ETL (Extract, Transform, Load) al abstraer los detalles complejos y de
+bajo nivel. En lugar de escribir código procedimental que dicte cada
+paso, usas una sintaxis declarativa más simple en SQL o Python.
+
+Este laboratorio tardará aproximadamente **40** minutos en completarse.
+
+**Nota:** La interfaz de usuario de Azure Databricks está sujeta a
+mejoras continuas. La interfaz de usuario puede haber cambiado desde que
+se escribieron las instrucciones de este ejercicio. Lakeflow Declarative
+Pipelines es la evolución de las Delta Live Tables (DLT) de Databricks,
+que ofrecen un enfoque unificado tanto para cargas de trabajo por lotes
+como para streaming.
+
+Provision an Azure Databricks workspace
+
+**Consejo**: Si ya tienes un espacio de trabajo en Azure Databricks,
+puedes saltarte este procedimiento y usar tu espacio de trabajo actual.
+
+Este ejercicio incluye un script para provisionar un nuevo espacio de
+trabajo de Azure Databricks. El script intenta crear un recurso de
+espacio de trabajo de Azure Databricks de nivel Premium en una región en
+la que tu suscripción a Azure tenga cuota suficiente para los núcleos de
+cómputo requeridos en este ejercicio; y asume que tu cuenta de usuario
+tiene permisos suficientes en la suscripción para crear un recurso de
+espacio de trabajo de Azure Databricks. Si el script falla por falta de
+cuotas o permisos, puedes intentar [crear un espacio de trabajo Azure
+Databricks de forma interactiva en el portal de
+Azure](https://learn.microsoft.com/azure/databricks/getting-started/#--create-an-azure-databricks-workspace).
+
+1.  En un navegador web, inicia sesión en el [portal de
+    Azure](https://portal.azure.com/) en https://portal.azure.com.
+
+2.  Utiliza el **botón \[&gt;\_\]** a la derecha de la barra de búsqueda
+    en la parte superior de la página para crear una nueva Cloud Shell
+    en el portal de Azure, seleccionando un entorno PowerShell. La cloud
+    shell proporciona una interfaz de línea de comandos en un panel en
+    la parte inferior del portal de Azure, como se muestra aquí:
+
+<img src="./media/media/image1.png" style="width:6.1375in;height:4.45in"
+alt="Azure portal con un cloud shell pane" />
+
+**Nota:** Si anteriormente has creado una cloud shell que utiliza un
+*entorno Bash, cámbia a* PowerShell***.***
+
+1.  Ten en cuenta que puedes redimensionar la concha de la nube
+    arrastrando la barra de separación en la parte superior del panel, o
+    usando los **iconos —**, **⤢** y **X** en la parte superior derecha
+    del panel para minimizar, maximizar y cerrar el panel. Para más
+    información sobre el uso de Azure Cloud Shell, consulte la
+    [documentación de Azure Cloud
+    Shell](https://docs.microsoft.com/azure/cloud-shell/overview).
+
+2.  En el panel de PowerShell, introduce los siguientes comandos para
+    clonar este repositorio:
+
+código
+
+RM -r mslearn-databricks -f
+
+Git clone https://github.com/MicrosoftLearning/mslearn-databricks
+
+1.  Después de clonar el repositorio, introduce el siguiente comando
+    para ejecutar el **script setup.ps1**, que provisiona un espacio de
+    trabajo Azure Databricks en una región disponible:
+
+código
+
+./mslearn-databricks/setup.ps1
+
+1.  Si te lo piden, elige qué suscripción quieres usar (esto solo
+    ocurrirá si tienes acceso a varias suscripciones de Azure).
+
+2.  Espera a que termine el guion; esto suele tardar unos 5 minutos,
+    pero en algunos casos puede tardar más. Mientras esperas, revisa
+    el[Oleoductos declarativos de flujo de
+    lago](https://learn.microsoft.com/azure/databricks/dlt/)artículo en
+    la documentación de Azure Databricks.
+
+Crear un clúster
+
+Azure Databricks es una plataforma de procesamiento distribuida que
+utiliza *clústeres Apache Spark* para procesar datos en paralelo en
+múltiples nodos. Cada clúster consta de un nodo controlador para
+coordinar el trabajo y nodos de trabajo para realizar tareas de
+procesamiento. En este ejercicio, crearás un *clúster de un solo nodo*
+para minimizar los recursos de cómputo utilizados en el entorno de
+laboratorio (en el que los recursos pueden estar limitados). En un
+entorno de producción, normalmente crearías un clúster con varios nodos
+de trabajo.
+
+**Consejo**: Si ya tienes un clúster con una versión de ejecución 13.3
+LTS o superior en tu espacio de trabajo de Azure Databricks, puedes
+usarlo para completar este ejercicio y saltarte este procedimiento.
+
+1.  En el portal de Azure, navega por el grupo **de recursos
+    msl-xxxxxxx** que fue creado por el script (o el grupo de recursos
+    que contiene tu espacio de trabajo existente en Azure Databricks)
+
+2.  Selecciona tu recurso de servicio Azure Databricks (llamado
+    **databricks-xxxxxxx** si usaste el script de configuración para
+    crearlo).
+
+3.  En la página **de Resumen** de tu espacio de trabajo, utiliza el
+    **botón Lanzar Espacio de Trabajo** para abrir tu espacio de trabajo
+    Azure Databricks en una nueva pestaña del navegador; inicia sesión
+    si se lo solicita.
+
+**Consejo**: Al utilizar el portal Databricks Workspace, pueden
+mostrarse diversos consejos y notificaciones. Despide estos y sigue las
+instrucciones proporcionadas para completar las tareas de este
+ejercicio.
+
+1.  En la barra lateral de la izquierda, selecciona la **(+) tarea**
+    Nueva y luego selecciona **Clúster** (puede que necesites mirar en
+    el **submenú** Más).
+
+2.  En la **página de Nuevo Clúster**, crea un nuevo clúster con los
+    siguientes ajustes:
+
+    -   **Nombre del clúster**: *Clúster de nombre de usuario* (el
+        nombre predeterminado del clúster)
+
+    -   **Política**: Sin restricciones
+
+    -   **Modo de clúster**: Nodo único
+
+    -   **Modo** acceso: Usuario único (*con tu cuenta de usuario
+        seleccionada*)
+
+    -   **Versión de ejecución de Databricks**: 13.3 LTS (Spark 3.4.1,
+        Scala 2.12) o posterior
+
+    -   **Usar aceleración de fotones**: seleccionado
+
+    -   **Tipo de nodo**: Standard\_D4ds\_v5
+
+    -   **Terminar tras** *20* **minutos de inactividad**
+
+3.  Espera a que se cree el clúster. Puede que tarde uno o dos minutos.
+
+**Nota:** Si tu clúster no se inicia, tu suscripción puede tener una
+cuota insuficiente en la región donde está provisionado tu espacio de
+trabajo Azure Databricks. Consulta [el límite de núcleos de CPU que
+impide la creación de
+clústeres](https://docs.microsoft.com/azure/databricks/kb/clusters/azure-core-limit)
+para más detalles. Si esto ocurre, puedes intentar eliminar tu espacio
+de trabajo y crear uno nuevo en otra región. Puedes especificar una
+región como parámetro para el script de configuración así:
+./mslearn-databricks/setup.ps1 eastus
+
+Crea un cuaderno e ingirte datos
+
+1.  En la barra lateral, usa el **enlace (+) Nuevo** para crear un
+    **Cuaderno**.
+
+2.  Cambia el nombre predeterminado del cuaderno (**Cuaderno sin título
+    *\[fecha***\]) a Ingestión y exploración de datos y, en la lista
+    **desplegable Conectar**, selecciona tu clúster si aún no está
+    seleccionado. Si el clúster no funciona, puede tardar un minuto o
+    así en arrancar.
+
+3.  En la primera celda del cuaderno, introduce el siguiente código, que
+    utiliza *comandos de shell* para descargar archivos de datos desde
+    GitHub al sistema de archivos que utiliza tu clúster.
+
+código
+
+%sh
+
+rm -r /dbfs/delta\_lab
+
+mkdir /dbfs/delta\_lab
+
+wget -O /dbfs/delta\_lab/covid\_data.csv
+https://github.com/MicrosoftLearning/mslearn-databricks/raw/main/data/covid\_data.csv
+
+1.  Usa la opción de menú **▸ Ejecutar celda** a la izquierda de la
+    celda para ejecutarlo. Luego espera a que el trabajo de Spark
+    ejecutado por el código se complete.
+
+Crear Lakeflow Declarative Pipeline usando SQL
+
+1.  Crea un nuevo cuaderno y cámbialo como Cuaderno Covid Pipeline.
+
+2.  Junto al nombre del cuaderno, selecciona **Python** y cambia el
+    lenguaje por defecto a **SQL**.
+
+3.  Introduce el siguiente código en la primera celda *sin ejecutarlo*.
+    Todas las celdas se ejecutarán después de que se cree la
+    canalización. Este código define una vista materializada que se
+    poblará con los datos en bruto previamente descargados:
+
+SQL
+
+CREAR O ACTUALIZAR LA VISTA MATERIALIZADA raw\_covid\_data
+
+COMENTARIO "Conjunto de datos de muestra COVID. Estos datos fueron
+tomados del Repositorio de Datos COVID-19 del Centro de Ciencia e
+Ingeniería de Sistemas (CSSE) de la Universidad Johns Hopkins."
+
+COMO
+
+ESCOGER
+
+Last\_Update,
+
+Country\_Region,
+
+Empedernido
+
+Muertes
+
+Recuperado
+
+FROM read\_files('dbfs:/delta\_lab/covid\_data.csv', format =&gt; 'csv',
+cabecera =&gt; true)
+
+1.  Bajo la primera celda, utiliza el icono **de código +** para añadir
+    una nueva celda e introduce el siguiente código para consultar,
+    filtrar y formatear los datos de la tabla anterior antes del
+    análisis.
+
+SQL
+
+CREAR O ACTUALIZAR LA VISTA MATERIALIZADA processed\_covid\_data(
+
+RESTRICCIÓN valid\_country\_region ESPERAR (Country\_Region NO ES NULA)
+EN LA ACTUALIZACIÓN DE FALLO DE VIOLACIÓN
+
+)
+
+COMENTARIO "Datos formateados y filtrados para análisis."
+
+COMO
+
+ESCOGER
+
+TO\_DATE(Last\_Update, 'MM/dd/aaa') como Report\_Date,
+
+Country\_Region,
+
+Empedernido
+
+Muertes
+
+Recuperado
+
+DE live.raw\_covid\_data;
+
+1.  En una tercera celda de código nueva, introduce el siguiente código
+    que creará una vista de datos enriquecida para un análisis posterior
+    una vez que la tubería se ejecute con éxito.
+
+SQL
+
+CREAR O ACTUALIZAR LA VISTA MATERIALIZADA aggregated\_covid\_data
+
+COMENTARIO: "Datos agregados diarios para EE. UU. con conteos totales."
+
+COMO
+
+ESCOGER
+
+Report\_Date,
+
+sum(confirmado) como Total\_Confirmed,
+
+suma (muertes) como Total\_Deaths,
+
+sum(Recuperado) como Total\_Recovered
+
+DE live.processed\_covid\_data
+
+GRUPO POR Report\_Date;
+
+1.  Selecciona **Trabajos y Canalizaciones** en la barra lateral
+    izquierda y luego selecciona **Pipeline ETL**.
+
+2.  En la página **Crear pipeline**, crea un nuevo pipeline con las
+    siguientes configuraciones:
+
+    -   **Nombre del oleoducto**: Covid Pipeline
+
+    -   **Edición del producto**: Avanzado
+
+    -   **Modo de canalización**: Activado
+
+    -   **Código fuente**: *Navega hasta tu* cuaderno Covid Pipeline
+        *Notebook en la* carpeta *Usuarios/user@name*.
+
+    -   **Opciones de almacenamiento**: Metastore de Colmena
+
+    -   **Ubicación de almacenamiento**: dbfs:/pipelines/delta\_lab
+
+    -   **Esquema objetivo**: *Introducir* el predeterminado
+
+3.  Selecciona **Crear** y luego **Iniciar**. Luego espera a que la
+    tubería se ejecute (lo que puede llevar algo de tiempo).
+
+4.  Después de que la tubería se haya ejecutado con éxito, vuelve
+    primero al cuaderno *reciente de Ingestión y Exploración de Datos*
+    que creaste y ejecuta el siguiente código en una nueva celda para
+    verificar que los archivos de las 3 nuevas tablas se han creado en
+    la ubicación de almacenamiento especificada:
+
+código
+
+display(dbutils.fs.ls("dbfs:/pipelines/delta\_lab/schemas/default/tables"))
+
+1.  Añade otra celda de código y ejecuta el siguiente código para
+    verificar que las tablas han sido creadas en la base **de datos
+    predeterminada**:
+
+SQL
+
+%sql
+
+TABLAS DE EXPOSICIÓN
+
+Ver los resultados como una visualización
+
+Después de crear las tablas, es posible cargarlas en dataframes y
+visualizar los datos.
+
+1.  En el cuaderno *de Ingestión y Exploración de Datos*, añade una
+    nueva celda de código y ejecuta el siguiente código para cargar el
+    aggregated\_covid\_data en un dataframe:
+
+SQL
+
+%sql
+
+SELECCIONAR \* DE aggregated\_covid\_data
+
+1.  Encima de la tabla de resultados, selecciona **+** y luego
+    selecciona **Visualización** para ver el editor de visualización, y
+    después aplica las siguientes opciones:
+
+    -   **Tipo de visualización**: Línea
+
+    -   **Columna X**: Report\_Date
+
+    -   **Columna Y**: *Añade una nueva columna y selecciona*
+        **Total\_Confirmed**. *Aplica la* **agregación** *de sumas*.
+
+2.  Guarda la visualización y ve la tabla resultante en el cuaderno.
